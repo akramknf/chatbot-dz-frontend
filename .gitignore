@@ -1,0 +1,17 @@
+# Secrets et variables d'environnement
+.env
+*.env
+
+# Fichiers Python (dépendances)
+__pycache__/
+*.pyc
+
+# Dossiers de l'environnement virtuel Python
+venv/
+.venv/
+
+# Clés d'API (au cas où vous les mettriez accidentellement en dur)
+*.key
+
+# Fichiers de log et de test local
+ngrok.yml
