@@ -50,8 +50,8 @@
 
     <div class="container">
         <div id="dashboard">
-            <h2>Tickets Handoff (Public - Temps Réel) 💬</h2>
-            <p>Affichage des tickets ouverts pour le rôle **public**.</p>
+            <h2>Tickets Handoff (Validation Connexion) 💬</h2>
+            <p>Affichage des tickets ouverts pour le rôle **public** (Requête statique).</p>
             <div id="tickets-list">
                 <p>Initialisation du Dashboard...</p>
             </div>
@@ -61,90 +61,83 @@
     <script src="./nhost_dist/nhost-js.umd.js"></script>
 
     <script>
+        
         // --- Vérification de chargement ---
-if (typeof nhost === 'undefined') {
-    document.getElementById('tickets-list').innerHTML = 
-        '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT : Le fichier **./nhost_dist/nhost-js.umd.js** est introuvable. Vérifiez que TOUS les fichiers dépendants sont dans le dossier **nhost_dist**.</p>';
-} else {
-    // La variable globale 'nhost' est définie, le constructeur est prêt.
-    
-    // --- Configuration et Initialisation ---
+        if (typeof window.NhostJs === 'undefined') { 
+            document.getElementById('tickets-list').innerHTML = 
+                '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT : Le fichier **./nhost_dist/nhost-js.umd.js** est introuvable. Vérifiez l\'existence du dossier **nhost_dist** et que tous les fichiers dépendants sont présents.</p>';
+        } else {
+            
+            // 1. Correction du nom et de l'initialisation
+            const NhostModule = window.NhostJs;
 
-    // Initialisation du client Nhost
-    const nhostClient = new nhost.NhostClient({ 
-        // URL de base corrigée :
-        backendUrl: 'https://mzstncjahdwecptxgtop.nhost.run' 
-    });
-
-    const ticketsList = document.getElementById('tickets-list');
-
-    // --- Fonctions ---
-
-    function subscribeToPublicTickets() {
-        
-        // Requête GraphQL de Souscription (utilise le rôle public)
-        const SUBSCRIBE_TICKETS = `
-            subscription GetOpenTickets {
-                Chatbot_DZ_Tickets_Handoff(
-                    where: {status: {_eq: "open"}},
-                    order_by: {created_at: desc}
-                ) {
-                    id
-                    channel_id
-                    last_message
-                    status
-                    created_at
-                }
-            }
-        `;
-
-        nhostClient.graphql.subscribe({
-            query: SUBSCRIBE_TICKETS
-        }).subscribe(
-            (response) => {
-                // Les données arrivent ici en temps réel
-                if (response.error) {
-                    console.error('Erreur de souscription:', response.error);
-                    // Problème de PERMISSION dans Hasura
-                    ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL: Vérifiez la permission **select** du rôle **public** sur Chatbot_DZ_Tickets_Handoff.</p>';
-                } else {
-                    renderTickets(response.data.Chatbot_DZ_Tickets_Handoff);
-                }
-            },
-            (error) => {
-                // Problème de connexion WebSocket
-                console.error('Erreur WebSocket:', error);
-                ticketsList.innerHTML = '<p style="color:red;">⚠️ Erreur de connexion en temps réel. Le serveur Nhost est-il démarré ?</p>';
-            }
-        );
-    }
-
-    function renderTickets(tickets) {
-        ticketsList.innerHTML = ''; 
-        if (tickets.length === 0) {
-            ticketsList.innerHTML = '<p>✅ Aucun ticket ouvert pour le moment. Tout est géré !</p>';
-        }
-
-        for (const ticket of tickets) {
-            const ticketEl = document.createElement('div');
-            ticketEl.className = 'ticket';
-            const formattedDate = new Date(ticket.created_at).toLocaleString('fr-FR', {
-                hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit'
+            const nhostClient = NhostModule.createClient({ 
+                backendUrl: 'https://mzstncjahdwecptxgtop.nhost.run' 
             });
-            ticketEl.innerHTML = `
-                <h4>Conversation ID: ${ticket.channel_id.substring(0, 15)}...</h4>
-                <p>${ticket.last_message}</p>
-                <span>Ticket ouvert le: ${formattedDate}</span>
-            `;
-            ticketsList.appendChild(ticketEl);
-        }
-    }
-    
-    // Lancement de la souscription
-    subscribeToPublicTickets();
-}
 
-        
+            const ticketsList = document.getElementById('tickets-list');
+
+            // --- Fonctions ---
+
+            function fetchTicketsOnce() {
+                
+                // Correction: Utilisation de 'query' (requête statique)
+                const GET_TICKETS_QUERY = `
+                    query GetOpenTickets { 
+                        Chatbot_DZ_Tickets_Handoff(
+                            where: {status: {_eq: "open"}},
+                            order_by: {created_at: desc}
+                        ) {
+                            id
+                            channel_id
+                            last_message
+                            status
+                            created_at
+                        }
+                    }
+                `;
+
+                // Correction: Utilisation de la méthode '.request'
+                nhostClient.graphql.request({ 
+                    query: GET_TICKETS_QUERY
+                }).then((response) => {
+                    // La réponse contient les données ou l'erreur
+                    if (response.error) {
+                         console.error('Erreur de requête GraphQL:', response.error);
+                         ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL (Permissions): Le rôle **public** ne peut pas lire cette table. Vérifiez Hasura.</p>';
+                    } else {
+                         renderTickets(response.data.Chatbot_DZ_Tickets_Handoff);
+                    }
+                }).catch((error) => {
+                     console.error('Erreur HTTP/Réseau:', error);
+                     ticketsList.innerHTML = '<p style="color:red;">⚠️ Erreur de connexion au serveur GraphQL.</p>';
+                });
+            }
+
+            function renderTickets(tickets) {
+                ticketsList.innerHTML = ''; 
+                if (tickets.length === 0) {
+                    ticketsList.innerHTML = '<p>✅ Aucun ticket ouvert pour le moment. Tout est géré !</p>';
+                }
+
+                for (const ticket of tickets) {
+                    const ticketEl = document.createElement('div');
+                    ticketEl.className = 'ticket';
+                    const formattedDate = new Date(ticket.created_at).toLocaleString('fr-FR', {
+                        hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit'
+                    });
+                    ticketEl.innerHTML = `
+                        <h4>Conversation ID: ${ticket.channel_id.substring(0, 15)}...</h4>
+                        <p>${ticket.last_message}</p>
+                        <span>Ticket ouvert le: ${formattedDate}</span>
+                    `;
+                    ticketsList.appendChild(ticketEl);
+                }
+            }
+            
+            // Lancement de la requête
+            fetchTicketsOnce();
+        }
     </script>
 </body>
 </html>
