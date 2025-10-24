@@ -5,45 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Agent - Chatbot DZ (Accès Public)</title>
     <style>
-        body { 
-            font-family: sans-serif; 
-            display: grid; 
-            place-items: center; 
-            min-height: 100vh; 
-            background: #f4f4f4; 
-        }
-        .container { 
-            background: white; 
-            padding: 2rem; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-            width: 450px; 
-        }
-        #dashboard { 
-            display: block; 
-        }
-        .ticket { 
-            border: 1px solid #ccc; 
-            padding: 1rem; 
-            margin-top: 1rem; 
-            border-radius: 4px; 
-            background: #f9f9f9; 
-        }
-        .ticket h4 { 
-            margin: 0 0 0.5rem 0; 
-            color: #007bff; 
-        }
-        .ticket p { 
-            margin: 0; 
-            font-style: italic; 
-            font-weight: bold;
-        }
-        .ticket span { 
-            font-size: 0.8rem; 
-            color: #555; 
-            display: block; 
-            margin-top: 0.5rem; 
-        }
+        /* ... (votre CSS est inchangé) ... */
+        body { font-family: sans-serif; display: grid; place-items: center; min-height: 100vh; background: #f4f4f4; }
+        .container { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 450px; }
+        #dashboard { display: block; }
+        .ticket { border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; border-radius: 4px; background: #f9f9f9; }
+        .ticket h4 { margin: 0 0 0.5rem 0; color: #007bff; }
+        .ticket p { margin: 0; font-style: italic; font-weight: bold;}
+        .ticket span { font-size: 0.8rem; color: #555; display: block; margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -65,7 +34,7 @@
         // --- Vérification de chargement ---
         if (typeof window.NhostJs === 'undefined') { 
             document.getElementById('tickets-list').innerHTML = 
-                '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT : Le script Nhost est introuvable. Vérifiez l\'URL absolue du script sur GitHub.</p>';
+                '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT : Le script Nhost est introuvable.</p>';
         } else {
             
             const NhostModule = window.NhostJs;
@@ -81,6 +50,7 @@
 
             function fetchTicketsOnce() {
                 
+                // Requête GraphQL (simplifiée) pour le bon schéma
                 const GET_TICKETS_QUERY = `
                     query GetOpenTickets { 
                         Chatbot_DZ_Tickets_Handoff {
@@ -92,36 +62,41 @@
                     }
                 `;
 
-                // Logique then/catch corrigée
+                // CORRECTION FINALE: Ajout de l'en-tête 'x-hasura-role'
                 nhostClient.graphql.request({ 
-                    query: GET_TICKETS_QUERY
+                    query: GET_TICKETS_QUERY,
+                    headers: {
+                        'x-hasura-role': 'public'
+                    }
                 }).then((dataResponse) => {
-                    // dataResponse est l'objet { Chatbot_DZ_Tickets_Handoff: [...] }
-                    // On passe les données (qui peuvent être undefined si les permissions de colonne manquent)
-                    renderTickets(dataResponse.Chatbot_DZ_Tickets_Handoff);
+                    
+                    if (dataResponse && dataResponse.Chatbot_DZ_Tickets_Handoff) {
+                        // SUCCÈS
+                        renderTickets(dataResponse.Chatbot_DZ_Tickets_Handoff);
+                    } else {
+                        // La requête a réussi mais n'a pas renvoyé la table attendue.
+                        console.error("Données non reçues. 'Chatbot_DZ_Tickets_Handoff' est undefined.", dataResponse);
+                        ticketsList.innerHTML = '<p style="color:orange;">⚠️ Données non reçues. Le rôle **public** n\'a pas la permission **select** sur la table.</p>';
+                    }
 
                 }).catch((error) => {
-                     // Gère les erreurs réseau OU les erreurs GraphQL (Permissions, Syntaxe)
+                     // ERREUR: (Réseau, Syntaxe GraphQL)
                      console.error('Erreur GraphQL ou Réseau:', error);
-                     ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL (Vérifiez Console): La requête a échoué. Vérifiez les permissions Hasura.</p>';
+                     ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL (Vérifiez Console): La requête a échoué.</p>';
                 });
             }
 
-            // CORRECTION DE STABILITÉ: Gérer 'tickets' si undefined ou null
             function renderTickets(tickets) {
                 ticketsList.innerHTML = ''; 
 
-                // Si tickets est undefined, null, ou vide
                 if (!tickets || tickets.length === 0) {
                     ticketsList.innerHTML = '<p>✅ Aucun ticket trouvé pour le moment.</p>';
-                    return; // Quitte la fonction
+                    return; 
                 }
 
-                // Affiche les tickets
                 for (const ticket of tickets) {
                     const ticketEl = document.createElement('div');
                     ticketEl.className = 'ticket';
-                    
                     const ticketId = ticket.id.substring(0, 15) + '...';
 
                     ticketEl.innerHTML = `
