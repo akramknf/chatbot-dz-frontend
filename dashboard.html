@@ -58,21 +58,23 @@
         </div>
     </div>
 
-    <script src="./nhost_dist/nhost-js.umd.js"></script>
+    <script src="/chatbot-dz-frontend/nhost_dist/nhost-js.umd.js"></script>
 
     <script>
         
         // --- Vérification de chargement ---
         if (typeof window.NhostJs === 'undefined') { 
             document.getElementById('tickets-list').innerHTML = 
-                '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT : Le fichier **./nhost_dist/nhost-js.umd.js** est introuvable. Vérifiez l\'existence du dossier **nhost_dist** et que tous les fichiers dépendants sont présents.</p>';
+                '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT : Le script Nhost n\'a pas pu être chargé. Vérifiez l\'URL absolue du script sur GitHub.</p>';
         } else {
             
             // 1. Correction du nom et de l'initialisation
             const NhostModule = window.NhostJs;
 
+            // CORRECTION 2: Spécifier explicitement l'URL GraphQL pour éviter la connexion 'local.graphql'
             const nhostClient = NhostModule.createClient({ 
-                backendUrl: 'https://mzstncjahdwecptxgtop.nhost.run' 
+                backendUrl: 'https://mzstncjahdwecptxgtop.nhost.run',
+                graphqlUrl: 'https://mzstncjahdwecptxgtop.hasura.eu-central-1.nhost.run/v1/graphql' 
             });
 
             const ticketsList = document.getElementById('tickets-list');
@@ -81,7 +83,7 @@
 
             function fetchTicketsOnce() {
                 
-                // Correction: Utilisation de 'query' (requête statique)
+                // Utilisation de 'query' (requête statique) pour valider la connexion
                 const GET_TICKETS_QUERY = `
                     query GetOpenTickets { 
                         Chatbot_DZ_Tickets_Handoff(
@@ -97,18 +99,20 @@
                     }
                 `;
 
-                // Correction: Utilisation de la méthode '.request'
+                // Utilisation de la méthode '.request'
                 nhostClient.graphql.request({ 
                     query: GET_TICKETS_QUERY
                 }).then((response) => {
-                    // La réponse contient les données ou l'erreur
                     if (response.error) {
                          console.error('Erreur de requête GraphQL:', response.error);
+                         // S'il y a une erreur GraphQL (code 403), c'est une erreur de permission Hasura.
                          ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL (Permissions): Le rôle **public** ne peut pas lire cette table. Vérifiez Hasura.</p>';
                     } else {
+                         // Succès de la requête
                          renderTickets(response.data.Chatbot_DZ_Tickets_Handoff);
                     }
                 }).catch((error) => {
+                     // S'il y a une erreur réseau ici, c'est que le serveur Nhost est down ou l'URL est mal tapée.
                      console.error('Erreur HTTP/Réseau:', error);
                      ticketsList.innerHTML = '<p style="color:red;">⚠️ Erreur de connexion au serveur GraphQL.</p>';
                 });
