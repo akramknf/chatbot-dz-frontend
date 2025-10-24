@@ -51,7 +51,7 @@
     <div class="container">
         <div id="dashboard">
             <h2>Tickets Handoff (Validation Connexion) 💬</h2>
-            <p>Affichage des tickets ouverts pour le rôle **public** (Requête statique).</p>
+            <p>Affichage des tickets ouverts pour le rôle **public**.</p>
             <div id="tickets-list">
                 <p>Initialisation du Dashboard...</p>
             </div>
@@ -65,13 +65,13 @@
         // --- Vérification de chargement ---
         if (typeof window.NhostJs === 'undefined') { 
             document.getElementById('tickets-list').innerHTML = 
-                '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT : Le script Nhost n\'a pas pu être chargé. Vérifiez l\'URL absolue du script sur GitHub.</p>';
+                '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT : Le script Nhost est introuvable. Vérifiez l\'URL absolue du script sur GitHub.</p>';
         } else {
             
-            // 1. Correction du nom et de l'initialisation
+            // 1. Initialisation du client Nhost
             const NhostModule = window.NhostJs;
 
-            // CORRECTION 2: Spécifier explicitement l'URL GraphQL pour éviter la connexion 'local.graphql'
+            // Spécification explicite de l'URL GraphQL pour éviter la connexion 'local.graphql'
             const nhostClient = NhostModule.createClient({ 
                 backendUrl: 'https://mzstncjahdwecptxgtop.nhost.run',
                 graphqlUrl: 'https://mzstncjahdwecptxgtop.hasura.eu-central-1.nhost.run/v1/graphql' 
@@ -83,36 +83,34 @@
 
             function fetchTicketsOnce() {
                 
-                // Utilisation de 'query' (requête statique) pour valider la connexion
+                // CORRECTION MAJEURE: Requête GraphQL avec les 4 colonnes exactes de la DB
                 const GET_TICKETS_QUERY = `
                     query GetOpenTickets { 
                         Chatbot_DZ_Tickets_Handoff(
-                            where: {status: {_eq: "open"}},
-                            order_by: {created_at: desc}
+                            where: {status: {_eq: "ouvert"}}
+                            // PAS DE order_by car 'created_at' n'existe pas.
                         ) {
                             id
                             channel_id
                             last_message
                             status
-                            created_at
                         }
                     }
                 `;
 
-                // Utilisation de la méthode '.request'
+                // Utilisation de la méthode '.request' pour valider la connexion
                 nhostClient.graphql.request({ 
                     query: GET_TICKETS_QUERY
                 }).then((response) => {
                     if (response.error) {
                          console.error('Erreur de requête GraphQL:', response.error);
-                         // S'il y a une erreur GraphQL (code 403), c'est une erreur de permission Hasura.
-                         ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL (Permissions): Le rôle **public** ne peut pas lire cette table. Vérifiez Hasura.</p>';
+                         // S'il y a une erreur ici, c'est l'erreur de permission Hasura.
+                         ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL (Permissions): Le rôle **public** ne peut pas lire cette table. **Vérifiez Hasura**.</p>';
                     } else {
                          // Succès de la requête
                          renderTickets(response.data.Chatbot_DZ_Tickets_Handoff);
                     }
                 }).catch((error) => {
-                     // S'il y a une erreur réseau ici, c'est que le serveur Nhost est down ou l'URL est mal tapée.
                      console.error('Erreur HTTP/Réseau:', error);
                      ticketsList.innerHTML = '<p style="color:red;">⚠️ Erreur de connexion au serveur GraphQL.</p>';
                 });
@@ -127,13 +125,14 @@
                 for (const ticket of tickets) {
                     const ticketEl = document.createElement('div');
                     ticketEl.className = 'ticket';
-                    const formattedDate = new Date(ticket.created_at).toLocaleString('fr-FR', {
-                        hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit'
-                    });
+                    
+                    // Puisque 'created_at' n'existe pas, nous n'affichons pas la date/heure.
+                    const ticketId = ticket.id.substring(0, 15) + '...';
+
                     ticketEl.innerHTML = `
-                        <h4>Conversation ID: ${ticket.channel_id.substring(0, 15)}...</h4>
-                        <p>${ticket.last_message}</p>
-                        <span>Ticket ouvert le: ${formattedDate}</span>
+                        <h4>ID Conversation: ${ticketId}</h4>
+                        <p>Dernier message: **${ticket.last_message}**</p>
+                        <span>Statut: ${ticket.status}</span>
                     `;
                     ticketsList.appendChild(ticketEl);
                 }
