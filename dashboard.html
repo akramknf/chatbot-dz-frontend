@@ -51,7 +51,7 @@
     <div class="container">
         <div id="dashboard">
             <h2>Tickets Handoff (Validation Connexion) 💬</h2>
-            <p>Affichage des tickets ouverts pour le rôle **public**.</p>
+            <p>Affichage de tous les tickets (rôle **public**).</p>
             <div id="tickets-list">
                 <p>Initialisation du Dashboard...</p>
             </div>
@@ -71,7 +71,7 @@
             // 1. Initialisation du client Nhost
             const NhostModule = window.NhostJs;
 
-            // Spécification explicite de l'URL GraphQL pour éviter la connexion 'local.graphql'
+            // CORRECTION: Spécifier explicitement l'URL GraphQL pour éviter la connexion 'local.graphql'
             const nhostClient = NhostModule.createClient({ 
                 backendUrl: 'https://mzstncjahdwecptxgtop.nhost.run',
                 graphqlUrl: 'https://mzstncjahdwecptxgtop.hasura.eu-central-1.nhost.run/v1/graphql' 
@@ -83,13 +83,11 @@
 
             function fetchTicketsOnce() {
                 
-                // CORRECTION MAJEURE: Requête GraphQL avec les 4 colonnes exactes de la DB
+                // CORRECTION: Requête GraphQL la plus simple possible (sans 'where' ni 'order_by')
+                // pour corriger l'erreur 'not a valid graphql query'.
                 const GET_TICKETS_QUERY = `
                     query GetOpenTickets { 
-                        Chatbot_DZ_Tickets_Handoff(
-                            where: {status: {_eq: "ouvert"}}
-                            // PAS DE order_by car 'created_at' n'existe pas.
-                        ) {
+                        Chatbot_DZ_Tickets_Handoff {
                             id
                             channel_id
                             last_message
@@ -104,13 +102,14 @@
                 }).then((response) => {
                     if (response.error) {
                          console.error('Erreur de requête GraphQL:', response.error);
-                         // S'il y a une erreur ici, c'est l'erreur de permission Hasura.
+                         // Si vous voyez cette erreur, c'est un problème de permission Hasura.
                          ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL (Permissions): Le rôle **public** ne peut pas lire cette table. **Vérifiez Hasura**.</p>';
                     } else {
-                         // Succès de la requête
+                         // Succès !
                          renderTickets(response.data.Chatbot_DZ_Tickets_Handoff);
                     }
                 }).catch((error) => {
+                     // Erreur réseau (très improbable si l'étape précédente a fonctionné)
                      console.error('Erreur HTTP/Réseau:', error);
                      ticketsList.innerHTML = '<p style="color:red;">⚠️ Erreur de connexion au serveur GraphQL.</p>';
                 });
@@ -119,14 +118,14 @@
             function renderTickets(tickets) {
                 ticketsList.innerHTML = ''; 
                 if (tickets.length === 0) {
-                    ticketsList.innerHTML = '<p>✅ Aucun ticket ouvert pour le moment. Tout est géré !</p>';
+                    ticketsList.innerHTML = '<p>✅ Aucun ticket trouvé pour le moment.</p>';
                 }
 
+                // Affiche les tickets en utilisant uniquement les colonnes disponibles
                 for (const ticket of tickets) {
                     const ticketEl = document.createElement('div');
                     ticketEl.className = 'ticket';
                     
-                    // Puisque 'created_at' n'existe pas, nous n'affichons pas la date/heure.
                     const ticketId = ticket.id.substring(0, 15) + '...';
 
                     ticketEl.innerHTML = `
