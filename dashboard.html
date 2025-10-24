@@ -68,7 +68,6 @@
                 '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT : Le script Nhost est introuvable. Vérifiez l\'URL absolue du script sur GitHub.</p>';
         } else {
             
-            // 1. Initialisation du client Nhost
             const NhostModule = window.NhostJs;
 
             const nhostClient = NhostModule.createClient({ 
@@ -82,7 +81,6 @@
 
             function fetchTicketsOnce() {
                 
-                // Requête GraphQL (simplifiée)
                 const GET_TICKETS_QUERY = `
                     query GetOpenTickets { 
                         Chatbot_DZ_Tickets_Handoff {
@@ -94,26 +92,32 @@
                     }
                 `;
 
-                // CORRECTION FINALE: .then() reçoit 'data', .catch() reçoit 'error'.
+                // Logique then/catch corrigée
                 nhostClient.graphql.request({ 
                     query: GET_TICKETS_QUERY
                 }).then((dataResponse) => {
-                    // SUCCÈS: 'dataResponse' est l'objet { Chatbot_DZ_Tickets_Handoff: [...] }
+                    // dataResponse est l'objet { Chatbot_DZ_Tickets_Handoff: [...] }
+                    // On passe les données (qui peuvent être undefined si les permissions de colonne manquent)
                     renderTickets(dataResponse.Chatbot_DZ_Tickets_Handoff);
 
                 }).catch((error) => {
-                     // ERREUR: (Réseau, Permission Hasura, ou Syntaxe GraphQL)
+                     // Gère les erreurs réseau OU les erreurs GraphQL (Permissions, Syntaxe)
                      console.error('Erreur GraphQL ou Réseau:', error);
-                     ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL (Vérifiez Console): La requête a échoué. Vérifiez les permissions Hasura ou la syntaxe de la requête.</p>';
+                     ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL (Vérifiez Console): La requête a échoué. Vérifiez les permissions Hasura.</p>';
                 });
             }
 
+            // CORRECTION DE STABILITÉ: Gérer 'tickets' si undefined ou null
             function renderTickets(tickets) {
                 ticketsList.innerHTML = ''; 
-                if (tickets.length === 0) {
+
+                // Si tickets est undefined, null, ou vide
+                if (!tickets || tickets.length === 0) {
                     ticketsList.innerHTML = '<p>✅ Aucun ticket trouvé pour le moment.</p>';
+                    return; // Quitte la fonction
                 }
 
+                // Affiche les tickets
                 for (const ticket of tickets) {
                     const ticketEl = document.createElement('div');
                     ticketEl.className = 'ticket';
