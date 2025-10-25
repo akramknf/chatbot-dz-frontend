@@ -5,59 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Agent - Chatbot DZ</title>
     <style>
-        body { 
-            font-family: sans-serif; 
-            display: grid; 
-            place-items: center; 
-            min-height: 100vh; 
-            background: #f4f4f4; 
-        }
-        .container { 
-            background: white; 
-            padding: 2rem; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-            width: 450px; 
-        }
-        /* Cache le dashboard par défaut */
-        #dashboard-content { 
-            display: none; 
-        }
-        #login-form { 
-            display: block; 
-        }
-        input { 
-            display: block; 
-            margin-bottom: 1rem; 
-            padding: 0.5rem; 
-            width: 300px; 
-        }
-        button { 
-            padding: 0.5rem 1rem; 
-            cursor: pointer; 
-        }
-        .ticket { 
-            border: 1px solid #ccc; 
-            padding: 1rem; 
-            margin-top: 1rem; 
-            border-radius: 4px; 
-            background: #f9f9f9; 
-        }
-        .ticket h4 { 
-            margin: 0 0 0.5rem 0; 
-            color: #007bff; 
-        }
-        .ticket p { 
-            margin: 0; 
-            font-style: italic; 
-            font-weight: bold;
-        }
-        .ticket span { 
-            font-size: 0.8rem; 
-            color: #555; 
-            display: block; 
-            margin-top: 0.5rem; 
-        }
+        /* CSS... (inchangé) */
+        body { font-family: sans-serif; display: grid; place-items: center; min-height: 100vh; background: #f4f4f4; }
+        .container { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 450px; }
+        #dashboard-content { display: none; }
+        #login-form { display: block; }
+        input { display: block; margin-bottom: 1rem; padding: 0.5rem; width: 300px; }
+        button { padding: 0.5rem 1rem; cursor: pointer; }
+        .ticket { border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; border-radius: 4px; background: #f9f9f9; }
+        .ticket h4 { margin: 0 0 0.5rem 0; color: #007bff; }
+        .ticket p { margin: 0; font-style: italic; font-weight: bold;}
+        .ticket span { font-size: 0.8rem; color: #555; display: block; margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -82,11 +40,12 @@
         </div>
     </div>
 
-    <script src="/chatbot-dz-frontend/nhost_dist/nhost-js.umd.js"></script>
-<script type="module">
+    <script type="text/javascript">
         
-        // Importe l'objet principal et le renomme pour éviter les conflits
-        import { NhostClient } from 'https://esm.sh/@nhost/nhost-js'
+        // URLs Nhost (Les mêmes, sans le client Nhost)
+        const AUTH_URL = 'https://mzstncjahdwecptxgtop.nhost.run/v1/auth';
+        const GRAPHQL_URL = 'https://mzstncjahdwecptxgtop.hasura.eu-central-1.nhost.run/v1/graphql';
+        const SESSION_KEY = 'nhost_auth_session'; // Clé de stockage
 
         // Éléments du DOM
         const loginForm = document.getElementById('login-form');
@@ -95,16 +54,34 @@
         const logoutBtn = document.getElementById('logout-btn');
         const loginError = document.getElementById('login-error');
         const ticketsList = document.getElementById('tickets-list');
-        
-        // --- Initialisation ---
-        
-        // CORRECTION: Utiliser le constructeur NhostClient importé
-        const nhostClient = new NhostClient({ 
-            backendUrl: 'https://mzstncjahdwecptxgtop.nhost.run',
-            graphqlUrl: 'https://mzstncjahdwecptxgtop.hasura.eu-central-1.nhost.run/v1/graphql' 
-        });
 
-        // --- Logique de Connexion ---
+        let accessToken = null; // Stocke le jeton pour les requêtes GraphQL
+
+        // --- Logique de Stockage et d'Authentification ---
+
+        function getStoredSession() {
+            try {
+                const session = localStorage.getItem(SESSION_KEY);
+                if (session) return JSON.parse(session);
+            } catch (e) {
+                console.error("Erreur de lecture de session:", e);
+            }
+            return null;
+        }
+
+        function setSession(sessionData) {
+            if (sessionData && sessionData.accessToken) {
+                localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+                accessToken = sessionData.accessToken;
+                return true;
+            }
+            return false;
+        }
+
+        function clearSession() {
+            localStorage.removeItem(SESSION_KEY);
+            accessToken = null;
+        }
 
         loginBtn.onclick = async () => {
             loginError.textContent = '';
@@ -112,33 +89,42 @@
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
 
-                // C'est ici que l'erreur se produisait. Le client doit être correct maintenant.
-                const { session, error } = await nhostClient.auth.signIn({ email, password });
+                // UTILISATION DE FETCH pour la connexion
+                const response = await fetch(`${AUTH_URL}/signin/email-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
 
-                if (error) {
-                    throw new Error("Authentification échouée: " + error.message);
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error.message || data.error);
                 }
 
-                if (session) {
+                if (data.session && data.session.accessToken) {
+                    setSession(data.session);
                     showDashboard();
                 }
+
             } catch (error) {
                 console.error(error);
-                loginError.textContent = "Erreur: " + (error.message || "Connexion échouée.");
+                loginError.textContent = "Erreur: Vérifiez Email/Mot de passe. " + error.message;
             }
         };
 
-        logoutBtn.onclick = async () => {
-            await nhostClient.auth.signOut();
+        logoutBtn.onclick = () => {
+            clearSession();
             showLoginForm();
         };
+
 
         // --- Fonctions du Dashboard ---
 
         function showDashboard() {
             loginForm.style.display = 'none';
             dashboardContent.style.display = 'block';
-            fetchTicketsOnce(); 
+            fetchTicketsOnce(); // Charger les tickets après la connexion
         }
 
         function showLoginForm() {
@@ -147,7 +133,7 @@
             ticketsList.innerHTML = '';
         }
 
-        function fetchTicketsOnce() {
+        async function fetchTicketsOnce() {
             
             const GET_TICKETS_QUERY = `
                 query GetOpenTickets { 
@@ -159,19 +145,37 @@
                     }
                 }
             `;
+            
+            // La requête est désormais AUTHENTIFIÉE par le jeton JWT
+            try {
+                const response = await fetch(GRAPHQL_URL, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}` // Le JWT est envoyé ici
+                    },
+                    body: JSON.stringify({ query: GET_TICKETS_QUERY })
+                });
 
-            nhostClient.graphql.request({ 
-                query: GET_TICKETS_QUERY
-            }).then((dataResponse) => {
-                if (dataResponse && dataResponse.Chatbot_DZ_Tickets_Handoff) {
-                    renderTickets(dataResponse.Chatbot_DZ_Tickets_Handoff);
-                } else {
-                    ticketsList.innerHTML = '<p style="color:red;">❌ Connexion réussie, mais le rôle **user** n\'a pas la permission **select** sur la table. **Vérifiez Hasura**.</p>';
+                const result = await response.json();
+                
+                if (result.errors) {
+                    console.error('Erreur GraphQL/Permissions:', result.errors);
+                    ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL: Le rôle **user** n\'a pas la permission de lire la table. **Vérifiez Hasura**.</p>';
+                    return;
                 }
-            }).catch((error) => {
-                 console.error('Erreur GraphQL/Réseau:', error);
-                 ticketsList.innerHTML = '<p style="color:red;">⚠️ Erreur de connexion ou serveur hors ligne.</p>';
-            });
+
+                if (result.data && result.data.Chatbot_DZ_Tickets_Handoff) {
+                    renderTickets(result.data.Chatbot_DZ_Tickets_Handoff);
+                } else {
+                    // Devrait être impossible si la requête n'a pas d'erreurs
+                    ticketsList.innerHTML = '<p style="color:orange;">⚠️ Requête réussie mais données manquantes. (Bug Hasura/Rendu).</p>';
+                }
+
+            } catch (error) {
+                console.error('Erreur Réseau/Serveur:', error);
+                ticketsList.innerHTML = '<p style="color:red;">⚠️ Erreur de connexion ou serveur hors ligne.</p>';
+            }
         }
 
         function renderTickets(tickets) {
@@ -182,9 +186,8 @@
             }
             for (const ticket of tickets) {
                 const ticketEl = document.createElement('div');
-                // ... (Reste de la fonction renderTickets)
-                const ticketId = ticket.id.substring(0, 15) + '...';
                 ticketEl.className = 'ticket';
+                const ticketId = ticket.id.substring(0, 15) + '...';
                 ticketEl.innerHTML = `
                     <h4>ID Conversation: ${ticketId}</h4>
                     <p>Dernier message: **${ticket.last_message}**</p>
@@ -194,10 +197,12 @@
             }
         }
         
-        // --- Vérifier au démarrage ---
-        // Le code doit utiliser 'nhostClient.auth.isAuthenticated()' qui devrait maintenant fonctionner.
-        if (nhostClient.auth.isAuthenticated()) {
+        // --- Vérifier au démarrage si l'utilisateur est déjà connecté ---
+        const initialSession = getStoredSession();
+        if (initialSession) {
+            accessToken = initialSession.accessToken;
             showDashboard();
         }
     </script>
-  
+</body>
+</html>
