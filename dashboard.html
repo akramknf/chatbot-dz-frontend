@@ -5,59 +5,73 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Agent - Chatbot DZ</title>
     <style>
-        /* CSS... (inchangé) */
-        body { font-family: sans-serif; display: grid; place-items: center; min-height: 100vh; background: #f4f4f4; }
-        .container { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 450px; }
-        #dashboard-content { display: none; }
-        #login-form { display: block; }
-        input { display: block; margin-bottom: 1rem; padding: 0.5rem; width: 300px; }
-        button { padding: 0.5rem 1rem; cursor: pointer; }
-        .ticket { border: 1px solid #ccc; padding: 1rem; margin-top: 1rem; border-radius: 4px; background: #f9f9f9; }
-        .ticket h4 { margin: 0 0 0.5rem 0; color: #007bff; }
-        .ticket p { margin: 0; font-style: italic; font-weight: bold;}
-        .ticket span { font-size: 0.8rem; color: #555; display: block; margin-top: 0.5rem; }
+        body { 
+            font-family: sans-serif; 
+            display: grid; 
+            place-items: center; 
+            min-height: 100vh; 
+            background: #f4f4f4; 
+        }
+        .container { 
+            background: white; 
+            padding: 2rem; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+            width: 450px; 
+        }
+        #dashboard-content { 
+            display: block; 
+        }
+        /* Style simple pour l'affichage */
+        .ticket { 
+            border: 1px solid #ccc; 
+            padding: 1rem; 
+            margin-top: 1rem; 
+            border-radius: 4px; 
+            background: #f9f9f9; 
+        }
+        .ticket h4 { 
+            margin: 0 0 0.5rem 0; 
+            color: #007bff; 
+        }
+        .ticket p { 
+            margin: 0; 
+            font-style: italic; 
+            font-weight: bold;
+        }
+        .ticket span { 
+            font-size: 0.8rem; 
+            color: #555; 
+            display: block; 
+            margin-top: 0.5rem; 
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
         
-        <div id="login-form">
-            <h2>Connexion Agent</h2>
-            <input type="email" id="email" placeholder="Email" value="admin@chatbot-dz.com">
-            <input type="password" id="password" placeholder="Mot de passe">
-            <button id="login-btn">Se connecter</button>
-            <p id="login-error" style="color: red;"></p>
-        </div>
-
         <div id="dashboard-content">
             <h2>Tickets Handoff 💬</h2>
-            <p>Connecté en tant que rôle **user**.</p>
-            <button id="logout-btn">Déconnexion</button>
+            <p>Accès public/anonyme.</p>
             <div id="tickets-list">
-                <p>Chargement des tickets...</p>
+                <p>Tentative d'accès...</p>
             </div>
         </div>
     </div>
 
     <script type="text/javascript">
         
-        // URLs Nhost (Les mêmes, sans le client Nhost)
+        // URLs Nhost
         const AUTH_URL = 'https://mzstncjahdwecptxgtop.nhost.run/v1/auth';
         const GRAPHQL_URL = 'https://mzstncjahdwecptxgtop.hasura.eu-central-1.nhost.run/v1/graphql';
-        const SESSION_KEY = 'nhost_auth_session'; // Clé de stockage
+        const SESSION_KEY = 'nhost_anonymous_session'; // Clé de stockage spécifique
 
         // Éléments du DOM
-        const loginForm = document.getElementById('login-form');
-        const dashboardContent = document.getElementById('dashboard-content');
-        const loginBtn = document.getElementById('login-btn');
-        const logoutBtn = document.getElementById('logout-btn');
-        const loginError = document.getElementById('login-error');
         const ticketsList = document.getElementById('tickets-list');
+        let accessToken = null; 
 
-        let accessToken = null; // Stocke le jeton pour les requêtes GraphQL
-
-        // --- Logique de Stockage et d'Authentification ---
+        // --- Fonctions de Stockage et d'Authentification Anonyme ---
 
         function getStoredSession() {
             try {
@@ -78,22 +92,20 @@
             return false;
         }
 
-        function clearSession() {
-            localStorage.removeItem(SESSION_KEY);
-            accessToken = null;
-        }
-
-        loginBtn.onclick = async () => {
-            loginError.textContent = '';
+        async function signInAnonymous() {
             try {
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
+                // Tente d'utiliser le jeton existant
+                const storedSession = getStoredSession();
+                if (storedSession && storedSession.accessToken) {
+                    accessToken = storedSession.accessToken;
+                    return true;
+                }
 
-                // UTILISATION DE FETCH pour la connexion
-                const response = await fetch(`${AUTH_URL}/signin/email-password`, {
+                // UTILISATION DE FETCH pour la connexion anonyme
+                const response = await fetch(`${AUTH_URL}/signin/anonymous`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({}) // Corps vide pour la connexion anonyme
                 });
 
                 const data = await response.json();
@@ -103,38 +115,24 @@
                 }
 
                 if (data.session && data.session.accessToken) {
-                    setSession(data.session);
-                    showDashboard();
+                    return setSession(data.session);
                 }
-
             } catch (error) {
-                console.error(error);
-                loginError.textContent = "Erreur: Vérifiez Email/Mot de passe. " + error.message;
+                console.error("Erreur de connexion anonyme:", error);
+                ticketsList.innerHTML = `<p style="color:red;">❌ Échec de l'accès anonyme. Cause: ${error.message}. Vérifiez l'activation de l'authentification anonyme dans Nhost.</p>`;
+                return false;
             }
-        };
-
-        logoutBtn.onclick = () => {
-            clearSession();
-            showLoginForm();
-        };
-
-
-        // --- Fonctions du Dashboard ---
-
-        function showDashboard() {
-            loginForm.style.display = 'none';
-            dashboardContent.style.display = 'block';
-            fetchTicketsOnce(); // Charger les tickets après la connexion
         }
 
-        function showLoginForm() {
-            loginForm.style.display = 'block';
-            dashboardContent.style.display = 'none';
-            ticketsList.innerHTML = '';
-        }
+        // --- Fonctions Principales ---
 
         async function fetchTicketsOnce() {
             
+            // 1. Tente d'obtenir un jeton anonyme
+            const isAuthenticated = await signInAnonymous();
+            if (!isAuthenticated) return;
+
+            // 2. Requête GraphQL (Utilise le jeton anonyme)
             const GET_TICKETS_QUERY = `
                 query GetOpenTickets { 
                     Chatbot_DZ_Tickets_Handoff {
@@ -146,13 +144,12 @@
                 }
             `;
             
-            // La requête est désormais AUTHENTIFIÉE par le jeton JWT
             try {
                 const response = await fetch(GRAPHQL_URL, {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${accessToken}` // Le JWT est envoyé ici
+                        'Authorization': `Bearer ${accessToken}` // Le JWT anonyme est envoyé
                     },
                     body: JSON.stringify({ query: GET_TICKETS_QUERY })
                 });
@@ -161,15 +158,14 @@
                 
                 if (result.errors) {
                     console.error('Erreur GraphQL/Permissions:', result.errors);
-                    ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL: Le rôle **user** n\'a pas la permission de lire la table. **Vérifiez Hasura**.</p>';
+                    ticketsList.innerHTML = '<p style="color:red;">❌ Erreur GraphQL: Le rôle **anonymous** n\'a pas la permission de lire la table. **Vérifiez Hasura**.</p>';
                     return;
                 }
 
                 if (result.data && result.data.Chatbot_DZ_Tickets_Handoff) {
                     renderTickets(result.data.Chatbot_DZ_Tickets_Handoff);
                 } else {
-                    // Devrait être impossible si la requête n'a pas d'erreurs
-                    ticketsList.innerHTML = '<p style="color:orange;">⚠️ Requête réussie mais données manquantes. (Bug Hasura/Rendu).</p>';
+                    ticketsList.innerHTML = '<p style="color:orange;">⚠️ Données manquantes ou format de réponse invalide.</p>';
                 }
 
             } catch (error) {
@@ -197,12 +193,8 @@
             }
         }
         
-        // --- Vérifier au démarrage si l'utilisateur est déjà connecté ---
-        const initialSession = getStoredSession();
-        if (initialSession) {
-            accessToken = initialSession.accessToken;
-            showDashboard();
-        }
+        // Lancement de l'accès anonyme au chargement de la page
+        fetchTicketsOnce();
     </script>
 </body>
 </html>
