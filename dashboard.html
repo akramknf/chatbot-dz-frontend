@@ -83,126 +83,121 @@
     </div>
 
     <script src="/chatbot-dz-frontend/nhost_dist/nhost-js.umd.js"></script>
-
-    <script>
+<script type="module">
         
-        if (typeof window.NhostJs === 'undefined') { 
-            document.getElementById('tickets-list').innerHTML = '<p style="color:red;">❌ ÉCHEC DE CHARGEMENT SCRIPT</p>';
-        } else {
+        // Importe l'objet principal et le renomme pour éviter les conflits
+        import { NhostClient } from 'https://esm.sh/@nhost/nhost-js'
+
+        // Éléments du DOM
+        const loginForm = document.getElementById('login-form');
+        const dashboardContent = document.getElementById('dashboard-content');
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const loginError = document.getElementById('login-error');
+        const ticketsList = document.getElementById('tickets-list');
+        
+        // --- Initialisation ---
+        
+        // CORRECTION: Utiliser le constructeur NhostClient importé
+        const nhostClient = new NhostClient({ 
+            backendUrl: 'https://mzstncjahdwecptxgtop.nhost.run',
+            graphqlUrl: 'https://mzstncjahdwecptxgtop.hasura.eu-central-1.nhost.run/v1/graphql' 
+        });
+
+        // --- Logique de Connexion ---
+
+        loginBtn.onclick = async () => {
+            loginError.textContent = '';
+            try {
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+
+                // C'est ici que l'erreur se produisait. Le client doit être correct maintenant.
+                const { session, error } = await nhostClient.auth.signIn({ email, password });
+
+                if (error) {
+                    throw new Error("Authentification échouée: " + error.message);
+                }
+
+                if (session) {
+                    showDashboard();
+                }
+            } catch (error) {
+                console.error(error);
+                loginError.textContent = "Erreur: " + (error.message || "Connexion échouée.");
+            }
+        };
+
+        logoutBtn.onclick = async () => {
+            await nhostClient.auth.signOut();
+            showLoginForm();
+        };
+
+        // --- Fonctions du Dashboard ---
+
+        function showDashboard() {
+            loginForm.style.display = 'none';
+            dashboardContent.style.display = 'block';
+            fetchTicketsOnce(); 
+        }
+
+        function showLoginForm() {
+            loginForm.style.display = 'block';
+            dashboardContent.style.display = 'none';
+            ticketsList.innerHTML = '';
+        }
+
+        function fetchTicketsOnce() {
             
-            const NhostModule = window.NhostJs;
-            const nhostClient = NhostModule.createClient({ 
-                backendUrl: 'https://mzstncjahdwecptxgtop.nhost.run',
-                graphqlUrl: 'https://mzstncjahdwecptxgtop.hasura.eu-central-1.nhost.run/v1/graphql' 
+            const GET_TICKETS_QUERY = `
+                query GetOpenTickets { 
+                    Chatbot_DZ_Tickets_Handoff {
+                        id
+                        channel_id
+                        last_message
+                        status
+                    }
+                }
+            `;
+
+            nhostClient.graphql.request({ 
+                query: GET_TICKETS_QUERY
+            }).then((dataResponse) => {
+                if (dataResponse && dataResponse.Chatbot_DZ_Tickets_Handoff) {
+                    renderTickets(dataResponse.Chatbot_DZ_Tickets_Handoff);
+                } else {
+                    ticketsList.innerHTML = '<p style="color:red;">❌ Connexion réussie, mais le rôle **user** n\'a pas la permission **select** sur la table. **Vérifiez Hasura**.</p>';
+                }
+            }).catch((error) => {
+                 console.error('Erreur GraphQL/Réseau:', error);
+                 ticketsList.innerHTML = '<p style="color:red;">⚠️ Erreur de connexion ou serveur hors ligne.</p>';
             });
+        }
 
-            // Éléments du DOM
-            const loginForm = document.getElementById('login-form');
-            const dashboardContent = document.getElementById('dashboard-content');
-            const loginBtn = document.getElementById('login-btn');
-            const logoutBtn = document.getElementById('logout-btn');
-            const loginError = document.getElementById('login-error');
-            const ticketsList = document.getElementById('tickets-list');
-
-            // --- Logique de Connexion ---
-
-            loginBtn.onclick = async () => {
-                loginError.textContent = '';
-                try {
-                    const email = document.getElementById('email').value;
-                    const password = document.getElementById('password').value;
-
-                    // Tente de se connecter
-                    const { session, error } = await nhostClient.auth.signIn({ email, password });
-
-                    if (error) {
-                        throw new Error("Authentification échouée: " + error.message);
-                    }
-
-                    if (session) {
-                        showDashboard();
-                    }
-                } catch (error) {
-                    console.error(error);
-                    loginError.textContent = "Erreur: Vérifiez Email/Mot de passe.";
-                }
-            };
-
-            logoutBtn.onclick = async () => {
-                await nhostClient.auth.signOut();
-                showLoginForm();
-            };
-
-            // --- Fonctions du Dashboard ---
-
-            function showDashboard() {
-                loginForm.style.display = 'none';
-                dashboardContent.style.display = 'block';
-                fetchTicketsOnce(); // Charger les tickets après la connexion
+        function renderTickets(tickets) {
+            ticketsList.innerHTML = ''; 
+            if (!tickets || tickets.length === 0) {
+                ticketsList.innerHTML = '<p>✅ Aucun ticket trouvé pour le moment.</p>';
+                return; 
             }
-
-            function showLoginForm() {
-                loginForm.style.display = 'block';
-                dashboardContent.style.display = 'none';
-                ticketsList.innerHTML = '';
-            }
-
-            function fetchTicketsOnce() {
-                
-                // Requête GraphQL (sans filtre pour le test)
-                const GET_TICKETS_QUERY = `
-                    query GetOpenTickets { 
-                        Chatbot_DZ_Tickets_Handoff {
-                            id
-                            channel_id
-                            last_message
-                            status
-                        }
-                    }
+            for (const ticket of tickets) {
+                const ticketEl = document.createElement('div');
+                // ... (Reste de la fonction renderTickets)
+                const ticketId = ticket.id.substring(0, 15) + '...';
+                ticketEl.className = 'ticket';
+                ticketEl.innerHTML = `
+                    <h4>ID Conversation: ${ticketId}</h4>
+                    <p>Dernier message: **${ticket.last_message}**</p>
+                    <span>Statut: ${ticket.status}</span>
                 `;
-
-                // La requête est désormais AUTHENTIFIÉE par le JWT
-                nhostClient.graphql.request({ 
-                    query: GET_TICKETS_QUERY
-                    // Pas de header 'x-hasura-role' requis, Nhost utilise le rôle du JWT ('user')
-                }).then((dataResponse) => {
-                    if (dataResponse && dataResponse.Chatbot_DZ_Tickets_Handoff) {
-                        renderTickets(dataResponse.Chatbot_DZ_Tickets_Handoff);
-                    } else {
-                        // Ce cas signifie que la requête a réussi (HTTP 200) mais que Hasura n'a rien renvoyé (Erreur de permission de colonne/ligne)
-                        ticketsList.innerHTML = '<p style="color:red;">❌ Connexion réussie, mais le rôle **user** n\'a pas la permission **select** sur la table. **Vérifiez Hasura**.</p>';
-                    }
-                }).catch((error) => {
-                     // Gère les erreurs réseau ou les erreurs de serveur
-                     console.error('Erreur GraphQL/Réseau:', error);
-                     ticketsList.innerHTML = '<p style="color:red;">⚠️ Erreur de connexion ou serveur hors ligne.</p>';
-                });
-            }
-
-            function renderTickets(tickets) {
-                ticketsList.innerHTML = ''; 
-                if (!tickets || tickets.length === 0) {
-                    ticketsList.innerHTML = '<p>✅ Aucun ticket trouvé pour le moment.</p>';
-                    return; 
-                }
-                for (const ticket of tickets) {
-                    const ticketEl = document.createElement('div');
-                    ticketEl.className = 'ticket';
-                    const ticketId = ticket.id.substring(0, 15) + '...';
-                    ticketEl.innerHTML = `
-                        <h4>ID Conversation: ${ticketId}</h4>
-                        <p>Dernier message: **${ticket.last_message}**</p>
-                        <span>Statut: ${ticket.status}</span>
-                    `;
-                    ticketsList.appendChild(ticketEl);
-                }
-            }
-            
-            // --- Vérifier au démarrage si l'utilisateur est déjà connecté ---
-            if (nhostClient.auth.isAuthenticated()) {
-                showDashboard();
+                ticketsList.appendChild(ticketEl);
             }
         }
+        
+        // --- Vérifier au démarrage ---
+        // Le code doit utiliser 'nhostClient.auth.isAuthenticated()' qui devrait maintenant fonctionner.
+        if (nhostClient.auth.isAuthenticated()) {
+            showDashboard();
+        }
     </script>
-</body>
-</html>
+  
